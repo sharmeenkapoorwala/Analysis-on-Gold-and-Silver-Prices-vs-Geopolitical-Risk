@@ -1,0 +1,314 @@
+---
+title: "650A Final Project"
+format: pdf
+editor: visual
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
+```
+
+
+- libraries
+
+```{r}
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(scales)
+library(tidyr)
+library(gtsummary)
+library(hexbin)
+library(stringr)
+```
+
+# Import Dataset
+
+```{r}
+Gold_Silver_GPR <- read_csv("Gold-Silver-GeopoliticalRisk_HistoricalData.csv")
+```
+
+# Data Wrangling
+
+```{r}
+#rows and columns
+dim(Gold_Silver_GPR)
+
+colSums(is.na(Gold_Silver_GPR)) #missing values
+colSums(Gold_Silver_GPR == "", na.rm = T) #checking null values
+
+#removing missing values
+Gold_Silver_GPR_clean <- drop_na(Gold_Silver_GPR)
+
+
+#remove event column since there is no value for events
+
+Gold_Silver_GPR_clean<- 
+  subset(Gold_Silver_GPR, select = -EVENT) |> drop_na()
+
+colSums(is.na(Gold_Silver_GPR_clean)) #after removing missing values
+
+```
+
+```{r}
+#making a column for year merging all dates of same year in it
+
+Gold_Silver_GPR_clean$YEAR <- format(Gold_Silver_GPR_clean$DATE, "%Y")
+
+Gold_Silver_GPR_clean <- Gold_Silver_GPR_clean |>
+  relocate(YEAR, .after = DATE )  #relocating year after date for better visualization 
+
+```
+
+
+# Summary for Gold Prices w.r.t years (1985-2025)
+```{r}
+
+gold_year <- Gold_Silver_GPR_clean |>
+  group_by(YEAR) |>
+  summarize(
+    GOLD_PRICE = mean(GOLD_PRICE,na.rm = T)) #taking mean of all dates to get a single value for each year
+
+#making the numerical variable 'years'  into another categorized variable 'YEAR_GROUP'
+Gold_Silver_GPR_clean <- Gold_Silver_GPR_clean |>
+  mutate(
+  YEAR_GROUP = case_when(
+     (YEAR = 1985 & YEAR <1995) ~ "1985-1994",
+      (YEAR = 1995 & YEAR <2005) ~ "1995-2004",
+      (YEAR = 2005 & YEAR <2014) ~ "2005-2014",
+      (YEAR = 2015 & YEAR <=2025) ~ "2015-2025"))
+
+Gold_Silver_GPR_clean <- Gold_Silver_GPR_clean |>
+  relocate(YEAR_GROUP, .after = YEAR )  #relocating 'YEAR_GROUP' after year for better visualization 
+
+#summary table
+Gold_Silver_GPR_clean |>
+  select(GOLD_PRICE,SILVER_PRICE, GPRD, YEAR_GROUP ) |>
+  tbl_summary(by = YEAR_GROUP)
+
+
+#Stats for gold prices
+Gold_Silver_GPR_clean |>
+  group_by(YEAR) |>
+  summarize(
+    mean_gold = mean(GOLD_PRICE,na.rm = T),
+    sd_gold = sd(GOLD_PRICE, na.rm = T),
+    max_gold = max(GOLD_PRICE, na.rm = T),
+    min_gold = min(GOLD_PRICE, na.rm = T)
+  )
+
+
+```
+
+
+# Summary for Silver Prices w.r.t years (1985-2025)
+
+```{r}
+
+silver_year <- Gold_Silver_GPR_clean |>
+  group_by(YEAR) |>
+  summarize(
+    SILVER_PRICE = mean(SILVER_PRICE,na.rm = T))
+
+
+Gold_Silver_GPR_clean |>
+  group_by(YEAR) |>
+  summarize(
+    mean_silver = mean(SILVER_PRICE,na.rm = T),
+    sd_silver = sd(SILVER_PRICE, na.rm = T),
+    max_silver = max(SILVER_PRICE, na.rm = T),
+    min_silver = min(SILVER_PRICE, na.rm = T)
+  )
+
+```
+# Data Visualization for Gold Prices
+
+ - Histogram
+```{r}
+ggplot(gold_year,
+       aes(x= YEAR, y = GOLD_PRICE))+ 
+  geom_col(alpha = 0.6, fill= "turquoise") + 
+  scale_y_continuous(labels = label_dollar(
+    prefix = "$"),
+    breaks = seq(0,3500,by = 500))+
+  labs (title = "Gold Prices w.r.t years(1985-2025)",
+        x="Years", 
+        y = "Gold Prices($)") +
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 65, 
+                                   hjust = 1))
+
+```
+
+ 
+ - Line Plot 
+```{r}
+ggplot(gold_year,
+       aes(x= YEAR, y = GOLD_PRICE))+ 
+  geom_line(linewidth = 1) + 
+  geom_point(size = 2) +
+  scale_y_continuous(labels = label_dollar(
+    prefix = "$"),
+    breaks = seq(0,3500,by = 500))+
+  labs (title = "Gold Prices w.r.t years(1985-2025)",
+        x="Years", 
+        y = "Gold Prices($)") +
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 65, 
+                                   hjust = 1))
+```
+
+
+ - Scatter plot and Hex Plot for Gold Prices for GPRD
+```{r}
+ggplot(Gold_Silver_GPR_clean,
+       aes(x= GOLD_PRICE,
+           y =GPRD))+ 
+  geom_point(alpha = 0.7,  size = 0.3, color =  "turquoise") + 
+  geom_smooth(method = "lm", se =  F) +
+  scale_x_continuous(labels = label_dollar(
+    prefix = "$"),
+    breaks = seq(0,3500,by = 500))+
+  scale_color_viridis_c (option = "G", direction = -1, name = "Count")+
+  labs (title = "Distribution of Gold Prices with GPRD",
+        x = "Gold Price",
+        y = "GPRD") +
+  theme_minimal()
+
+
+ggplot(Gold_Silver_GPR_clean, aes(x =  GOLD_PRICE, y = GPRD)) +
+  geom_hex(bins = 30)+
+  scale_x_continuous(labels = label_dollar(
+    prefix = "$"),
+    breaks = seq(0,3500,by = 500))+
+  labs (title = "Distribution of Gold Prices with GPRD",
+        x = "Gold Price",
+        y = "GPRD") +
+  theme_minimal()
+```
+
+
+# Data Visualization for Silver Prices
+
+ - Histogram
+```{r}
+
+ggplot(silver_year,
+       aes(x= YEAR, y = SILVER_PRICE))+ 
+  geom_col(alpha = 0.6, fill= "turquoise") + 
+  scale_y_continuous(labels = label_dollar(
+    prefix = "$"),
+    breaks = seq(0,50,by = 5))+
+  labs (title = "Silver Prices w.r.t years(1985-2025)",
+        x="Years", 
+        y = "Silver Prices($)") +
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 65, 
+                                   hjust = 1))
+
+```
+
+
+
+ - Line Plot 
+```{r}
+ggplot(silver_year,
+       aes(x= YEAR, y = SILVER_PRICE))+ 
+  geom_line(linewidth = 1) + 
+  geom_point(size = 2) +
+  scale_y_continuous(labels = label_dollar(
+    prefix = "$"),
+    breaks = seq(0,50,by = 5))+
+  labs (title = "Silver Prices w.r.t years(1985-2025)",
+        x="Years", 
+        y = "Silver Prices($)") +
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 65, 
+                                   hjust = 1))
+```
+
+- Scatter plot and Hex Plot for Gold Prices for GPRD
+
+
+```{r}
+ggplot(Gold_Silver_GPR_clean,
+       aes(x= SILVER_PRICE,
+           y =GPRD))+ 
+  geom_point(alpha = 0.7,  size = 0.3, color =  "turquoise") + 
+  geom_smooth(method = "lm", se =  F) +
+  scale_x_continuous(labels = label_dollar(
+    prefix = "$"),
+    breaks = seq(0,50,by = 5))+
+  scale_color_viridis_c (option = "G", direction = -1, name = "Count")+
+  labs (title = "Distribution of Silver Prices with GPRD",
+        x = "Silver Price",
+        y = "GPRD") +
+  theme_minimal()
+
+
+ggplot(Gold_Silver_GPR_clean, aes(x =  SILVER_PRICE,
+                                  y = GPRD)) +
+  geom_hex(bins = 30)+
+  scale_x_continuous(labels = label_dollar(
+    prefix = "$"),
+    breaks = seq(0,50,by = 5))+
+  labs (title = "Distribution of Silver Prices with GPRD",
+        x = "Silver Price",
+        y = "GPRD") +
+  theme_minimal()
+```
+
+
+# Data Visualization of Gold and Silver Prices with GPRD over years(1985-2025)
+```{r}
+
+
+ggplot(Gold_Silver_GPR_clean,
+       aes(x= YEAR_GROUP, y = SILVER_PRICE))+ 
+  geom_boxplot(alpha = 0.6, fill= "turquoise") + 
+  scale_y_continuous(labels = label_dollar(
+    prefix = "$"),
+    breaks = seq(0,50,by = 5))+
+  labs (title = "Silver Prices w.r.t years(1985-2025)",
+        x="Years", 
+        y = "Silver Prices($)") +
+  theme_light() 
+
+ggplot(Gold_Silver_GPR_clean,
+       aes(x= YEAR_GROUP, y = GOLD_PRICE))+ 
+  geom_boxplot(alpha = 0.6, fill= "turquoise") + 
+  scale_y_continuous(labels = label_dollar(
+    prefix = "$"),
+    breaks = seq(0,50,by = 5))+
+  labs (title = "Gold Prices w.r.t years(1985-2025)",
+        x="Years", 
+        y = "Gold Prices($)") +
+  theme_light() 
+
+silver_price_scale <-with(Gold_Silver_GPR_clean,
+                          max(GOLD_PRICE, na.rm = T) / max(SILVER_PRICE, na.rm = T))
+
+ggplot(Gold_Silver_GPR_clean, aes(x = YEAR))+
+  geom_line(aes(y = GOLD_PRICE, color = "Gold"), linewidth =1)+
+  geom_line(aes(y = SILVER_PRICE*silver_price_scale, color = "Silver"), linewidth =1) +
+  facet_wrap(~YEAR_GROUP, scales = "free_x")+
+  scale_x_discrete(breaks = seq(min(Gold_Silver_GPR_clean$YEAR),
+                            max(Gold_Silver_GPR_clean$YEAR), 
+                            by= 2))+
+  scale_y_continuous(sec.axis = sec_axis(~ . / silver_price_scale, name = "Silver Price($)"))+
+  scale_color_manual(values = c("Gold" = "gold", "Silver" ="gray40")) +
+  labs (title = "Comparison of Gold and Silver Prices 
+        with GDPR for years(1985-2025)",
+        x="Year", 
+        y = "Gold Prices($)",
+        color = "Metals")+
+  theme(axis.text.x = element_text(angle = 45, 
+                                   hjust = 1))
+  
+  
+```
+
+
+
